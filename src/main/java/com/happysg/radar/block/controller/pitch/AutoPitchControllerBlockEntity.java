@@ -12,6 +12,7 @@ import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
+import org.valkyrienskies.mod.common.VSGameUtilsKt;
 import rbasamoyai.createbigcannons.cannon_control.cannon_mount.CannonMountBlockEntity;
 import rbasamoyai.createbigcannons.cannon_control.contraption.AbstractMountedCannonContraption;
 import rbasamoyai.createbigcannons.cannon_control.contraption.PitchOrientedContraptionEntity;
@@ -103,7 +104,6 @@ public class AutoPitchControllerBlockEntity extends KineticBlockEntity {
         if (contraption == null)
             return false;
         int invert = -contraption.getInitialOrientation().getStepZ() + contraption.getInitialOrientation().getStepX();
-        System.out.println("pitch: " + contraption.pitch + " target: " + targetAngle + " invert: " + invert);
         return Math.abs(contraption.pitch * invert - targetAngle) < TOLERANCE;
     }
 
@@ -141,29 +141,35 @@ public class AutoPitchControllerBlockEntity extends KineticBlockEntity {
             isRunning = false;
             return;
         }
-
         isRunning = true;
 
+
         if (level.getBlockEntity(getBlockPos().relative(getBlockState().getValue(AutoPitchControllerBlock.HORIZONTAL_FACING))) instanceof CannonMountBlockEntity mount) {
-            List<Double> angles = CannonTargeting.calculatePitch(mount, targetPos, (ServerLevel) level);
-            if (angles == null || angles.isEmpty()) { //TODO unreachable target stop targeting if auto targeting?
-                isRunning = false;
-                return;
+            if(VSGameUtilsKt.isBlockInShipyard(level, this.getBlockPos())) {
+                CannonTargeting.calculatePitchAndYawVS2(mount, targetPos, (ServerLevel) level);
             }
-            List<Double> usableAngles = new ArrayList<>();
-            for (double angle : angles) {
-                if (mount.getContraption() == null) break;
-                if (angle < mount.getContraption().maximumElevation() && angle > -mount.getContraption().maximumDepression()) {
-                    usableAngles.add(angle);
+            else{
+                List<Double> angles = CannonTargeting.calculatePitch(mount, targetPos, (ServerLevel) level);
+                if (angles == null || angles.isEmpty()) { //TODO unreachable target stop targeting if auto targeting?
+                    isRunning = false;
+                    return;
                 }
-            }
-            if (artillery && usableAngles.size() == 2) {
-                targetAngle = angles.get(1);
-            } else if (!usableAngles.isEmpty()) {
-                targetAngle = usableAngles.get(0);
+                List<Double> usableAngles = new ArrayList<>();
+                for (double angle : angles) {
+                    if (mount.getContraption() == null) break;
+                    if (angle < mount.getContraption().maximumElevation() && angle > -mount.getContraption().maximumDepression()) {
+                        usableAngles.add(angle);
+                    }
+                }
+                if (artillery && usableAngles.size() == 2) {
+                    targetAngle = angles.get(1);
+                } else if (!usableAngles.isEmpty()) {
+                    targetAngle = usableAngles.get(0);
+                }
             }
         }
     }
+
 
     public void setFiringTarget(Vec3 targetPos, TargetingConfig targetingConfig) {
         if (firingControl == null)
